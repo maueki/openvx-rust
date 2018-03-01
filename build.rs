@@ -4,9 +4,15 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
+
+    println!("cargo:rustc-link-lib=openvx");
+    println!("cargo:rustc-link-search=native=/opt/rocm/lib");
+
     let bindings = bindgen::Builder::default()
-        .header("../../openvx_sample/include/VX/vx.h")
-        .clang_arg("-I../..//openvx_sample/include")
+        .header("/opt/rocm/include/VX/vx.h")
+        .clang_arg("-I/opt/rocm/include")
+        .blacklist_type("vx_pixel_value_t")
+        .blacklist_type("_vx_pixel_value_t")
         .generate()
         .expect("Unable to generate bindings");
 
