@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Ueki Masaru <masaru.ueki@itage.co.jp>"]
 
 [dependencies]
+error-chain = "*"
 
 [build-dependencies]
 bindgen = "0.33"
