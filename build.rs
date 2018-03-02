@@ -13,6 +13,8 @@ fn main() {
         .clang_arg("-I/opt/rocm/include")
         .blacklist_type("vx_pixel_value_t")
         .blacklist_type("_vx_pixel_value_t")
+        .constified_enum_module("vx_kernel_e")
+        .constified_enum_module("vx_df_image_e")
         .generate()
         .expect("Unable to generate bindings");
 
