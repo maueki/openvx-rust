@@ -11,7 +11,7 @@ mod openvx;
 use openvx::{Context, Graph};
 use openvx::*;
 
-fn vx_edge_graph_factory(c: &mut Context) -> Result<Graph> {
+fn edge_graph_factory(c: &mut Context) -> Result<Graph> {
     let kernels = vec![
         c.get_kernel_by_enum(VX_KERNEL_GAUSSIAN_3x3)?,
         c.get_kernel_by_enum(VX_KERNEL_SOBEL_3x3)?,
@@ -52,5 +52,7 @@ fn vx_edge_graph_factory(c: &mut Context) -> Result<Graph> {
 }
 
 fn main() {
-    let _context = Context::new();
+    let mut context = Context::new().unwrap();
+
+    let _graph = edge_graph_factory(&mut context).unwrap();
 }
