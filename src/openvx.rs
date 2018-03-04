@@ -26,6 +26,13 @@ use self::ffi::*;
 
 pub use self::ffi::vx_kernel_e::*;
 pub use self::ffi::vx_df_image_e::*;
+pub use self::ffi::vx_graph_attribute_e::*;
+
+use self::ffi::vx_status_e::*;
+
+use std::mem;
+use std::os::raw::{c_void};
+use std::rc::Rc;
 
 error_chain! {
     errors {
@@ -36,6 +43,10 @@ error_chain! {
 
 pub trait Reference {
     fn to_ref(&self) -> vx_reference;
+}
+
+pub trait Input {
+    fn set_input_image(&self, graph: &mut Graph, node: &Node, param_index: usize) -> Result<()>;
 }
 
 pub struct Context {
@@ -51,7 +62,7 @@ impl Context {
         unsafe {
             let ptr = vxCreateContext();
             let res = vxGetStatus(ptr as vx_reference);
-            if res != vx_status_e_VX_SUCCESS {
+            if res != VX_SUCCESS {
                 bail!(convert_error(res));
             }
 
@@ -63,11 +74,11 @@ impl Context {
         unsafe {
             let ptr = vxCreateGraph(self.ptr);
             let res =  vxGetStatus(ptr as vx_reference);
-            if res != vx_status_e_VX_SUCCESS {
+            if res != VX_SUCCESS {
                 bail!(convert_error(res));
             }
 
-            Ok(Graph{ptr})
+            Ok(Graph::new(ptr, self))
         }
     }
 
@@ -75,7 +86,7 @@ impl Context {
         unsafe {
             let ptr = vxGetKernelByEnum(self.ptr, kernel as i32);
             let res =  vxGetStatus(ptr as vx_reference);
-            if res != vx_status_e_VX_SUCCESS {
+            if res != VX_SUCCESS {
                 bail!(convert_error(res));
             }
 
@@ -83,18 +94,11 @@ impl Context {
         }
     }
 
-}
-
-pub struct Graph {
-    ptr: vx_graph
-}
-
-impl Graph {
-    pub fn create_virtual_image(&self, width: u32, height: u32, color: vx_df_image_e::Type) -> Result<Image> {
+    pub fn create_image(&self, width: u32, height: u32, color: vx_df_image_e::Type) -> Result<Image> {
         unsafe {
-            let ptr = vxCreateVirtualImage(self.ptr, width, height, color);
+            let ptr = vxCreateImage(self.ptr, width, height, color);
             let res =  vxGetStatus(ptr as vx_reference);
-            if res != vx_status_e_VX_SUCCESS {
+            if res != VX_SUCCESS {
                 bail!(convert_error(res));
             }
 
@@ -102,22 +106,75 @@ impl Graph {
         }
     }
 
-    pub fn create_generic_node(&self, kernel: &Kernel) -> Result<Node> {
+}
+
+pub struct Graph<'a> {
+    ptr: vx_graph,
+    ctx: &'a Context,
+    param_num: usize,
+}
+
+impl<'a> Graph<'a> {
+
+    fn new(ptr: vx_graph, ctx: &'a Context) -> Self {
+        Graph{ptr: ptr, ctx: ctx, param_num: 0}
+    }
+
+    fn create_virtual_image(&self, width: u32, height: u32, color: vx_df_image_e::Type) -> Result<Image> {
         unsafe {
-            let ptr = vxCreateGenericNode(self.ptr, kernel.ptr);
+            let ptr = vxCreateVirtualImage(self.ptr, width, height, color);
             let res =  vxGetStatus(ptr as vx_reference);
-            if res != vx_status_e_VX_SUCCESS {
+            if res != VX_SUCCESS {
                 bail!(convert_error(res));
             }
 
-            Ok(Node{ptr})
+            Ok(Image{ptr})
         }
     }
 
-    pub fn add_parameter(&self, param: &NodeParam) -> Result<()> {
+    fn create_generic_node(&self, kernel: &Kernel) -> Result<Node> {
+        unsafe {
+            let ptr = vxCreateGenericNode(self.ptr, kernel.ptr);
+            let res =  vxGetStatus(ptr as vx_reference);
+            if res != VX_SUCCESS {
+                bail!(convert_error(res));
+            }
+
+            Ok(Node{ptr: ptr})
+        }
+    }
+
+    fn add_parameter(&mut self, param: &NodeParam) -> Result<usize> {
         unsafe {
             let res = vxAddParameterToGraph(self.ptr, param.ptr);
-            if res != vx_status_e_VX_SUCCESS {
+            if res != VX_SUCCESS {
+                bail!(convert_error(res));
+            }
+
+            let param_index = self.param_num;
+            self.param_num += 1;
+
+            Ok(param_index)
+        }
+    }
+
+    fn query<T>(&self, attribute: vx_graph_attribute_e::Type) -> Result<T> {
+        unsafe {
+            let mut val: T = mem::uninitialized();
+            let ptr: *mut c_void = &mut val as *mut _ as *mut c_void;
+            let res = vxQueryGraph(self.ptr, attribute as i32, ptr, mem::size_of_val(&val));
+            if res != VX_SUCCESS {
+                bail!(convert_error(res));
+            }
+
+            Ok(val)
+        }
+    }
+
+    fn set_parameter_by_index(&self, index: usize, reference: &Reference) -> Result<()> {
+        unsafe {
+            let res = vxSetGraphParameterByIndex(self.ptr, index as u32, reference.to_ref());
+            if res != VX_SUCCESS {
                 bail!(convert_error(res));
             }
 
@@ -125,10 +182,59 @@ impl Graph {
         }
     }
 
-    pub fn release(mut self) -> Result<()> {
+    pub fn gaussian_3x3(&mut self, input: &Input) -> Result<NodeOutput> {
+
+        let kernel = self.ctx.get_kernel_by_enum(VX_KERNEL_GAUSSIAN_3x3)?;
+        let node = Rc::new(self.create_generic_node(&kernel)?);
+
+        input.set_input_image(self, &node, 0).unwrap();
+
+        let out = NodeOutput{node: node.clone(), param_index: 1};
+
+        Ok(out)
+    }
+
+    pub fn sobel_3x3(&mut self, input: &Input) -> Result<(NodeOutput, NodeOutput)> {
+
+        let kernel = self.ctx.get_kernel_by_enum(VX_KERNEL_SOBEL_3x3)?;
+        let node = Rc::new(self.create_generic_node(&kernel)?);
+
+        input.set_input_image(self, &node, 0).unwrap();
+
+        let out1 = NodeOutput{node: node.clone(), param_index: 1};
+        let out2 = NodeOutput{node: node.clone(), param_index: 2};
+
+
+        Ok((out1, out2))
+    }
+
+    pub fn magnitude(&mut self, grad_x: &Input, grad_y: &Input) -> Result<NodeOutput> {
+        let kernel = self.ctx.get_kernel_by_enum(VX_KERNEL_MAGNITUDE)?;
+        let node = Rc::new(self.create_generic_node(&kernel)?);
+
+        grad_x.set_input_image(self, &node, 0).unwrap();
+        grad_y.set_input_image(self, &node, 1).unwrap();
+
+        let out = NodeOutput{node: node.clone(), param_index: 2};
+        Ok(out)
+    }
+
+    pub fn create_input(&self, image: Image) -> Result<GraphInput> {
+        Ok(GraphInput{image: image})
+    }
+
+    pub fn set_output(&mut self, output: &NodeOutput, image: &Image) -> Result<()> {
+        let param = output.node.get_parameter_by_index(output.param_index as u32).unwrap();
+        let param_index = self.add_parameter(&param).unwrap();
+
+        self.set_parameter_by_index(param_index, image).unwrap();
+        Ok(())
+    }
+
+    pub fn verify(&self) -> Result<()> {
         unsafe {
-            let res = vxReleaseGraph(&mut self.ptr);
-            if res != vx_status_e_VX_SUCCESS {
+            let res = vxVerifyGraph(self.ptr);
+            if res != VX_SUCCESS {
                 bail!(convert_error(res));
             }
 
@@ -137,11 +243,11 @@ impl Graph {
     }
 }
 
-impl Drop for Graph {
+impl<'a> Drop for Graph<'a> {
     fn drop(&mut self) {
         unsafe {
             let res = vxReleaseGraph(&mut self.ptr);
-            if res != vx_status_e_VX_SUCCESS {
+            if res != VX_SUCCESS {
                 // TODO: 
             }
         }
@@ -165,7 +271,7 @@ impl Drop for Image {
     fn drop(&mut self) {
         unsafe {
             let res = vxReleaseImage(&mut self.ptr);
-            if res != vx_status_e_VX_SUCCESS {
+            if res != VX_SUCCESS {
                 // TODO: 
             }
         }
@@ -180,15 +286,15 @@ impl Kernel {
 }
 
 pub struct Node {
-    ptr: vx_node
+    ptr: vx_node,
 }
 
 impl Node {
-    pub fn get_parameter_by_index(&self, index: u32) -> Result<NodeParam> {
+    fn get_parameter_by_index(&self, index: u32) -> Result<NodeParam> {
         unsafe {
             let ptr = vxGetParameterByIndex(self.ptr, index);
                         let res =  vxGetStatus(ptr as vx_reference);
-            if res != vx_status_e_VX_SUCCESS {
+            if res != VX_SUCCESS {
                 bail!(convert_error(res));
             }
 
@@ -196,10 +302,10 @@ impl Node {
         }
     }
 
-    pub fn set_parameter_by_index(&self, index: u32, reference: &Reference) -> Result<()> {
+    fn set_parameter_by_index(&self, index: usize, reference: &Reference) -> Result<()> {
         unsafe {
-            let res = vxSetParameterByIndex(self.ptr, index, reference.to_ref());
-            if res != vx_status_e_VX_SUCCESS {
+            let res = vxSetParameterByIndex(self.ptr, index as u32, reference.to_ref());
+            if res != VX_SUCCESS {
                 bail!(convert_error(res));
             }
 
@@ -214,3 +320,36 @@ pub struct NodeParam {
 
 impl NodeParam {
 }
+
+pub struct NodeOutput {
+    node: Rc<Node>,
+    param_index: usize,
+}
+
+impl Input for NodeOutput {
+    fn set_input_image(&self, graph: &mut Graph, node: &Node, param_index: usize) -> Result<()> {
+        let image = graph.create_virtual_image(0, 0, VX_DF_IMAGE_VIRT).unwrap();
+
+        self.node.set_parameter_by_index(self.param_index, &image).unwrap();
+
+        node.set_parameter_by_index(param_index, &image).unwrap();
+        Ok(())
+    }
+}
+
+pub struct GraphInput {
+    image: Image,
+}
+
+impl Input for GraphInput {
+    fn set_input_image(&self, graph: &mut Graph, node: &Node, param_index: usize) -> Result<()> {
+        let param = node.get_parameter_by_index(param_index as u32).unwrap();
+        let graph_index = graph.add_parameter(&param).unwrap();
+
+        graph.set_parameter_by_index(graph_index, &self.image).unwrap();
+
+        node.set_parameter_by_index(param_index, &self.image).unwrap();
+        Ok(())
+    }
+}
+
