@@ -63,6 +63,16 @@ pub trait InputScalar {
     ) -> Result<()>;
 }
 
+pub trait InputArray {
+    fn set_input_scalar(
+        &self,
+        graph: &mut Graph,
+        node: &Node,
+        param_index: usize,
+        item_type: vx_type_e::Type,
+    ) -> Result<()>;
+}
+
 pub struct Context {
     ptr: vx_context,
 }
@@ -125,19 +135,31 @@ impl Context {
         }
     }
 
-    pub fn create_scalar<T>(
-        &self,
-        data_type: vx_type_e::Type,
-        val: &T,
-    ) -> Result<Scalar> {
+    pub fn create_scalar<T>(&self, data_type: vx_type_e::Type, val: &T) -> Result<Scalar> {
         unsafe {
-            let ptr = vxCreateScalar(self.ptr, data_type as i32, &val as *const _ as *const c_void);
+            let ptr = vxCreateScalar(
+                self.ptr,
+                data_type as i32,
+                &val as *const _ as *const c_void,
+            );
             let res = vxGetStatus(ptr as vx_reference);
             if res != VX_SUCCESS {
                 bail!(convert_error(res));
             }
 
             Ok(Scalar { ptr })
+        }
+    }
+
+    pub fn create_array(&self, item_type: vx_type_e::Type, capacity: usize) -> Result<Array> {
+        unsafe {
+            let ptr = vxCreateArray(self.ptr, item_type as i32, capacity);
+            let res = vxGetStatus(ptr as vx_reference);
+            if res != VX_SUCCESS {
+                bail!(convert_error(res));
+            }
+
+            Ok(Array { ptr })
         }
     }
 }
@@ -194,6 +216,18 @@ impl<'a> Graph<'a> {
             }
 
             Ok(Scalar { ptr })
+        }
+    }
+
+    fn create_virtual_array(&self, item_type: vx_type_e::Type, capacity: usize) -> Result<Array> {
+        unsafe {
+            let ptr = vxCreateVirtualArray(self.ptr, item_type as i32, capacity);
+            let res = vxGetStatus(ptr as vx_reference);
+            if res != VX_SUCCESS {
+                bail!(convert_error(res));
+            }
+
+            Ok(Array { ptr })
         }
     }
 
@@ -315,6 +349,17 @@ impl<'a> Graph<'a> {
         Ok(())
     }
 
+    pub fn set_output_array(&mut self, output: &NodeOutputArray, array: &Array) -> Result<()> {
+        let param = output
+            .node
+            .get_parameter_by_index(output.param_index as u32)
+            .unwrap();
+
+        let param_index = self.add_parameter(&param).unwrap();
+        self.set_parameter_by_index(param_index, array).unwrap();
+        Ok(())
+    }
+
     pub fn verify(&self) -> Result<()> {
         unsafe {
             let res = vxVerifyGraph(self.ptr);
@@ -390,6 +435,29 @@ impl Drop for Scalar {
 }
 
 impl Reference for Scalar {
+    fn to_ref(&self) -> vx_reference {
+        self.ptr as vx_reference
+    }
+}
+
+pub struct Array {
+    ptr: vx_array,
+}
+
+impl Array {}
+
+impl Drop for Array {
+    fn drop(&mut self) {
+        unsafe {
+            let res = vxReleaseArray(&mut self.ptr);
+            if res != VX_SUCCESS {
+                panic!("failed to release array");
+            }
+        }
+    }
+}
+
+impl Reference for Array {
     fn to_ref(&self) -> vx_reference {
         self.ptr as vx_reference
     }
@@ -490,6 +558,32 @@ default impl<T> InputScalar for T {
     ) -> Result<()> {
         let scalar = graph.ctx.create_scalar(data_type, &self).unwrap();
         node.set_parameter_by_index(param_index, &scalar).unwrap();
+        Ok(())
+    }
+}
+
+pub struct NodeOutputArray {
+    node: Rc<Node>,
+    param_index: usize,
+    item_type: vx_type_e::Type,
+}
+
+impl InputArray for NodeOutputArray {
+    fn set_input_scalar(
+        &self,
+        graph: &mut Graph,
+        node: &Node,
+        param_index: usize,
+        item_type: vx_type_e::Type,
+    ) -> Result<()> {
+        assert_eq!(self.item_type, item_type);
+
+        let array = graph.create_virtual_array(item_type, 0).unwrap();
+        self.node
+            .set_parameter_by_index(self.param_index, &array)
+            .unwrap();
+
+        node.set_parameter_by_index(param_index, &array).unwrap();
         Ok(())
     }
 }
