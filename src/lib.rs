@@ -51,7 +51,7 @@ pub trait Reference {
     fn to_ref(&self) -> vx_reference;
 }
 
-pub trait Input {
+pub trait InputImage {
     fn set_input_image(&self, graph: &mut Graph, node: &Node, param_index: usize) -> Result<()>;
 }
 
@@ -199,40 +199,40 @@ impl<'a> Graph<'a> {
         }
     }
 
-    pub fn gaussian_3x3(&mut self, input: &Input) -> Result<NodeOutput> {
+    pub fn gaussian_3x3(&mut self, input: &InputImage) -> Result<NodeOutputImage> {
 
         let kernel = self.ctx.get_kernel_by_enum(VX_KERNEL_GAUSSIAN_3x3)?;
         let node = Rc::new(self.create_generic_node(&kernel)?);
 
         input.set_input_image(self, &node, 0).unwrap();
 
-        let out = NodeOutput{node: node.clone(), param_index: 1};
+        let out = NodeOutputImage{node: node.clone(), param_index: 1};
 
         Ok(out)
     }
 
-    pub fn sobel_3x3(&mut self, input: &Input) -> Result<(NodeOutput, NodeOutput)> {
+    pub fn sobel_3x3(&mut self, input: &InputImage) -> Result<(NodeOutputImage, NodeOutputImage)> {
 
         let kernel = self.ctx.get_kernel_by_enum(VX_KERNEL_SOBEL_3x3)?;
         let node = Rc::new(self.create_generic_node(&kernel)?);
 
         input.set_input_image(self, &node, 0).unwrap();
 
-        let out1 = NodeOutput{node: node.clone(), param_index: 1};
-        let out2 = NodeOutput{node: node.clone(), param_index: 2};
+        let out1 = NodeOutputImage{node: node.clone(), param_index: 1};
+        let out2 = NodeOutputImage{node: node.clone(), param_index: 2};
 
 
         Ok((out1, out2))
     }
 
-    pub fn magnitude(&mut self, grad_x: &Input, grad_y: &Input) -> Result<NodeOutput> {
+    pub fn magnitude(&mut self, grad_x: &InputImage, grad_y: &InputImage) -> Result<NodeOutputImage> {
         let kernel = self.ctx.get_kernel_by_enum(VX_KERNEL_MAGNITUDE)?;
         let node = Rc::new(self.create_generic_node(&kernel)?);
 
         grad_x.set_input_image(self, &node, 0).unwrap();
         grad_y.set_input_image(self, &node, 1).unwrap();
 
-        let out = NodeOutput{node: node.clone(), param_index: 2};
+        let out = NodeOutputImage{node: node.clone(), param_index: 2};
         Ok(out)
     }
 
@@ -240,7 +240,7 @@ impl<'a> Graph<'a> {
         Ok(GraphInput{image: image})
     }
 
-    pub fn set_output(&mut self, output: &NodeOutput, image: &Image) -> Result<()> {
+    pub fn set_output(&mut self, output: &NodeOutputImage, image: &Image) -> Result<()> {
         let param = output.node.get_parameter_by_index(output.param_index as u32).unwrap();
         let param_index = self.add_parameter(&param).unwrap();
 
@@ -349,12 +349,12 @@ pub struct NodeParam {
 impl NodeParam {
 }
 
-pub struct NodeOutput {
+pub struct NodeOutputImage {
     node: Rc<Node>,
     param_index: usize,
 }
 
-impl Input for NodeOutput {
+impl InputImage for NodeOutputImage {
     fn set_input_image(&self, graph: &mut Graph, node: &Node, param_index: usize) -> Result<()> {
         let image = graph.create_virtual_image(0, 0, VX_DF_IMAGE_VIRT).unwrap();
 
@@ -369,7 +369,7 @@ pub struct GraphInput {
     image: Image,
 }
 
-impl Input for GraphInput {
+impl InputImage for GraphInput {
     fn set_input_image(&self, graph: &mut Graph, node: &Node, param_index: usize) -> Result<()> {
         let param = node.get_parameter_by_index(param_index as u32).unwrap();
         let graph_index = graph.add_parameter(&param).unwrap();
