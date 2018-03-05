@@ -28,11 +28,14 @@ mod ffi {
 
 use self::ffi::*;
 
-pub use self::ffi::vx_kernel_e::*;
 pub use self::ffi::vx_df_image_e::*;
-pub use self::ffi::vx_graph_attribute_e::*;
+pub use self::ffi::vx_channel_e::*;
+pub use self::ffi::vx_type_e::*;
 
+use self::ffi::vx_kernel_e::*;
 use self::ffi::vx_status_e::*;
+
+use self::ffi::vx_scalar_attribute_e::*;
 
 use std::mem;
 use std::os::raw::c_void;
@@ -77,7 +80,8 @@ pub struct Context {
     ptr: vx_context,
 }
 
-fn convert_error(_err: vx_status) -> ErrorKind {
+fn convert_error(err: vx_status) -> ErrorKind {
+    println!("!!!! error: {}", err);
     ErrorKind::ErrorNotImplemented
 }
 
@@ -136,11 +140,15 @@ impl Context {
     }
 
     pub fn create_scalar<T>(&self, data_type: vx_type_e::Type, val: &T) -> Result<Scalar> {
+        assert!(data_type > VX_TYPE_INVALID);
+        assert!(data_type < VX_TYPE_VENDOR_STRUCT_END);
+
         unsafe {
             let ptr = vxCreateScalar(
                 self.ptr,
                 data_type as i32,
-                &val as *const _ as *const c_void,
+                val as *const _ as *const c_void,
+//                std::mem::transmute::<&T, *const c_void>(val),
             );
             let res = vxGetStatus(ptr as vx_reference);
             if res != VX_SUCCESS {
@@ -152,6 +160,10 @@ impl Context {
     }
 
     pub fn create_array(&self, item_type: vx_type_e::Type, capacity: usize) -> Result<Array> {
+        assert!(item_type > VX_TYPE_INVALID);
+        assert!(item_type < VX_TYPE_VENDOR_STRUCT_END);
+        assert!(capacity > 0);
+
         unsafe {
             let ptr = vxCreateArray(self.ptr, item_type as i32, capacity);
             let res = vxGetStatus(ptr as vx_reference);
@@ -332,6 +344,83 @@ impl<'a> Graph<'a> {
             param_index: 2,
         };
         Ok(out)
+    }
+
+    pub fn channel_extract(
+        &mut self,
+        input: &InputImage,
+        channel: &InputScalar,
+    ) -> Result<NodeOutputImage> {
+        let kernel = self.ctx.get_kernel_by_enum(VX_KERNEL_CHANNEL_EXTRACT)?;
+        let node = Rc::new(self.create_generic_node(&kernel)?);
+
+        input.set_input_image(self, &node, 0).unwrap();
+        channel
+            .set_input_scalar(self, &node, 1, VX_TYPE_ENUM)
+            .unwrap();
+
+        let out = NodeOutputImage {
+            node: node.clone(),
+            param_index: 2,
+        };
+        Ok(out)
+    }
+
+    pub fn median_3x3(&mut self, input: &InputImage) -> Result<NodeOutputImage> {
+        let kernel = self.ctx.get_kernel_by_enum(VX_KERNEL_MEDIAN_3x3)?;
+        let node = Rc::new(self.create_generic_node(&kernel)?);
+
+        input.set_input_image(self, &node, 0).unwrap();
+
+        let out = NodeOutputImage {
+            node: node.clone(),
+            param_index: 1,
+        };
+        Ok(out)
+    }
+
+    pub fn harris_corners(
+        &mut self,
+        input: &InputImage,
+        strength_thresh: &InputScalar,
+        min_distance: &InputScalar,
+        sensitivity: &InputScalar,
+        gradient_size: &InputScalar,
+        block_size: &InputScalar,
+    ) -> Result<(NodeOutputArray, NodeOutputScalar)> {
+        let kernel = self.ctx.get_kernel_by_enum(VX_KERNEL_HARRIS_CORNERS)?;
+        let node = Rc::new(self.create_generic_node(&kernel)?);
+
+        input.set_input_image(self, &node, 0).unwrap();
+        strength_thresh
+            .set_input_scalar(self, &node, 1, VX_TYPE_FLOAT32)
+            .unwrap();
+        min_distance
+            .set_input_scalar(self, &node, 2, VX_TYPE_FLOAT32)
+            .unwrap();
+        sensitivity
+            .set_input_scalar(self, &node, 3, VX_TYPE_FLOAT32)
+            .unwrap();
+        gradient_size
+            .set_input_scalar(self, &node, 4, VX_TYPE_INT32)
+            .unwrap();
+        block_size
+            .set_input_scalar(self, &node, 5, VX_TYPE_INT32)
+            .unwrap();
+
+        let corners = NodeOutputArray {
+            node: node.clone(),
+            param_index: 6,
+            item_type: VX_TYPE_KEYPOINT,
+        };
+
+        let num_corners = NodeOutputScalar {
+            node: node.clone(),
+            param_index: 7,
+            data_type: VX_TYPE_SIZE,
+        };
+
+        Ok((corners, num_corners))
     }
 
     pub fn create_input(&self, image: Image) -> Result<GraphInput> {
@@ -556,7 +645,7 @@ default impl<T> InputScalar for T {
         param_index: usize,
         data_type: vx_type_e::Type,
     ) -> Result<()> {
-        let scalar = graph.ctx.create_scalar(data_type, &self).unwrap();
+        let scalar = graph.ctx.create_scalar(data_type, self).unwrap();
         node.set_parameter_by_index(param_index, &scalar).unwrap();
         Ok(())
     }
