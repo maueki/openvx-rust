@@ -2,6 +2,7 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
+#![feature(specialization)]
 
 #[macro_use]
 extern crate error_chain;
@@ -50,6 +51,16 @@ pub trait Reference {
 
 pub trait InputImage {
     fn set_input_image(&self, graph: &mut Graph, node: &Node, param_index: usize) -> Result<()>;
+}
+
+pub trait InputScalar {
+    fn set_input_scalar(
+        &self,
+        graph: &mut Graph,
+        node: &Node,
+        param_index: usize,
+        data_type: vx_type_e::Type,
+    ) -> Result<()>;
 }
 
 pub struct Context {
@@ -113,6 +124,22 @@ impl Context {
             Ok(Image { ptr })
         }
     }
+
+    pub fn create_scalar<T>(
+        &self,
+        data_type: vx_type_e::Type,
+        val: &T,
+    ) -> Result<Scalar> {
+        unsafe {
+            let ptr = vxCreateScalar(self.ptr, data_type as i32, &val as *const _ as *const c_void);
+            let res = vxGetStatus(ptr as vx_reference);
+            if res != VX_SUCCESS {
+                bail!(convert_error(res));
+            }
+
+            Ok(Scalar { ptr })
+        }
+    }
 }
 
 impl Drop for Context {
@@ -155,6 +182,18 @@ impl<'a> Graph<'a> {
             }
 
             Ok(Image { ptr })
+        }
+    }
+
+    fn create_virtual_scalar(&self, data_type: vx_type_e::Type) -> Result<Scalar> {
+        unsafe {
+            let ptr = vxCreateVirtualScalar(self.ptr, data_type as i32);
+            let res = vxGetStatus(ptr as vx_reference);
+            if res != VX_SUCCESS {
+                bail!(convert_error(res));
+            }
+
+            Ok(Scalar { ptr })
         }
     }
 
@@ -333,6 +372,29 @@ impl Drop for Image {
     }
 }
 
+pub struct Scalar {
+    ptr: vx_scalar,
+}
+
+impl Scalar {}
+
+impl Drop for Scalar {
+    fn drop(&mut self) {
+        unsafe {
+            let res = vxReleaseScalar(&mut self.ptr);
+            if res != VX_SUCCESS {
+                panic!("failed to release scalar");
+            }
+        }
+    }
+}
+
+impl Reference for Scalar {
+    fn to_ref(&self) -> vx_reference {
+        self.ptr as vx_reference
+    }
+}
+
 pub struct Kernel {
     ptr: vx_kernel,
 }
@@ -388,6 +450,46 @@ impl InputImage for NodeOutputImage {
             .unwrap();
 
         node.set_parameter_by_index(param_index, &image).unwrap();
+        Ok(())
+    }
+}
+
+pub struct NodeOutputScalar {
+    node: Rc<Node>,
+    param_index: usize,
+    data_type: vx_type_e::Type,
+}
+
+impl InputScalar for NodeOutputScalar {
+    fn set_input_scalar(
+        &self,
+        graph: &mut Graph,
+        node: &Node,
+        param_index: usize,
+        data_type: vx_type_e::Type,
+    ) -> Result<()> {
+        assert_eq!(self.data_type, data_type);
+
+        let scalar = graph.create_virtual_scalar(data_type).unwrap();
+        self.node
+            .set_parameter_by_index(self.param_index, &scalar)
+            .unwrap();
+
+        node.set_parameter_by_index(param_index, &scalar).unwrap();
+        Ok(())
+    }
+}
+
+default impl<T> InputScalar for T {
+    fn set_input_scalar(
+        &self,
+        graph: &mut Graph,
+        node: &Node,
+        param_index: usize,
+        data_type: vx_type_e::Type,
+    ) -> Result<()> {
+        let scalar = graph.ctx.create_scalar(data_type, &self).unwrap();
+        node.set_parameter_by_index(param_index, &scalar).unwrap();
         Ok(())
     }
 }
