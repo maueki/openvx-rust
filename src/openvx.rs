@@ -108,6 +108,17 @@ impl Context {
 
 }
 
+impl Drop for Context {
+    fn drop(&mut self) {
+        unsafe {
+            let res = vxReleaseContext(&mut self.ptr);
+            if res != VX_SUCCESS {
+                // TODO: 
+            }
+        }
+    }
+}
+
 pub struct Graph<'a> {
     ptr: vx_graph,
     ctx: &'a Context,
@@ -234,6 +245,17 @@ impl<'a> Graph<'a> {
     pub fn verify(&self) -> Result<()> {
         unsafe {
             let res = vxVerifyGraph(self.ptr);
+            if res != VX_SUCCESS {
+                bail!(convert_error(res));
+            }
+
+            Ok(())
+        }
+    }
+
+    pub fn run(&self) -> Result<()> {
+        unsafe {
+            let res = vxProcessGraph(self.ptr);
             if res != VX_SUCCESS {
                 bail!(convert_error(res));
             }

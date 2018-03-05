@@ -28,4 +28,6 @@ fn main() {
     g.set_output(&mag, &output_image).unwrap();
 
     g.verify().unwrap();
+
+    g.run().unwrap();
 }
