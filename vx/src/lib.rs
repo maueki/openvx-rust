@@ -1,39 +1,20 @@
 #![allow(dead_code)]
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
 #![feature(specialization)]
 
+extern crate vx_api;
 #[macro_use]
 extern crate error_chain;
 
-#[allow(non_camel_case_types, non_upper_case_globals, non_snake_case, dead_code)]
-mod ffi {
+use vx_api::*;
 
-    #[repr(C)]
-    pub union vx_pixel_value_t {
-        pub RGB: [u8; 3usize],
-        pub RGBX: [u8; 4usize],
-        pub YUV: [u8; 3usize],
-        pub U8: u8,
-        pub U16: u16,
-        pub S16: i16,
-        pub U32: u32,
-        pub S32: i32,
-        pub reserved: [u8; 16usize],
-    }
+pub use vx_df_image_e::*;
+pub use vx_channel_e::*;
+pub use vx_type_e::*;
+pub use vx_image_attribute_e::*;
 
-    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-}
-
-pub use self::ffi::*;
-
-pub use self::ffi::vx_df_image_e::*;
-pub use self::ffi::vx_channel_e::*;
-pub use self::ffi::vx_type_e::*;
-
-use self::ffi::vx_kernel_e::*;
-use self::ffi::vx_status_e::*;
+use vx_kernel_e::*;
+use vx_status_e::*;
+use vx_memory_type_e::*;
 
 use std::mem;
 use std::os::raw::c_void;
@@ -137,16 +118,26 @@ impl Context {
         }
     }
 
+    pub unsafe fn create_image_from_buffer(&self, format: vx_df_image_e::Type,
+                                    addr: &vx_imagepatch_addressing_t,
+                                    buffer: &[u8]) -> Result<Image> {
+        let ptr = vxCreateImageFromHandle(self.ptr, format,
+                                          addr as *const _,
+                                          &buffer as *const _ as *const *const c_void,
+                                          VX_MEMORY_TYPE_HOST as i32);
+        let res = vxGetStatus(ptr as vx_reference);
+        if res != vx_status_e::VX_SUCCESS {
+            bail!(convert_error(res));
+        }
+        Ok(Image{ptr})
+    }
+
     pub fn create_scalar<T>(&self, data_type: vx_type_e::Type, val: &T) -> Result<Scalar> {
         assert!(data_type > VX_TYPE_INVALID);
         assert!(data_type < VX_TYPE_VENDOR_STRUCT_END);
 
         unsafe {
-            let ptr = vxCreateScalar(
-                self.ptr,
-                data_type as i32,
-                val as *const _ as *const c_void,
-            );
+            let ptr = vxCreateScalar(self.ptr, data_type as i32, val as *const _ as *const c_void);
             let res = vxGetStatus(ptr as vx_reference);
             if res != VX_SUCCESS {
                 bail!(convert_error(res));
@@ -484,7 +475,24 @@ pub struct Image {
     pub ptr: vx_image,
 }
 
-impl Image {}
+impl Image {
+    pub fn query<T>(&self, attr: vx_image_attribute_e::Type) -> Result<T> {
+        unsafe {
+            let mut val: T = mem::uninitialized();
+            let res = vxQueryImage(
+                self.ptr,
+                attr as i32,
+                &mut val as *mut _ as *mut c_void,
+                std::mem::size_of_val(&val),
+            );
+            if res != VX_SUCCESS {
+                bail!(convert_error(res));
+            }
+
+            Ok(val)
+        }
+    }
+}
 
 impl Reference for Image {
     fn to_ref(&self) -> vx_reference {

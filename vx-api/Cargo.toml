@@ -1,0 +1,9 @@
+[package]
+name = "vx-api"
+version = "0.1.0"
+authors = ["Ueki Masaru <masaru.ueki@itage.co.jp>"]
+
+[dependencies]
+
+[build-dependencies]
+bindgen = "0.33"

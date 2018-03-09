@@ -267,6 +267,8 @@ version = "0.0.1"
 dependencies = [
  "cv 0.2.1 (git+https://github.com/nebgnahz/cv-rs.git)",
  "vx 0.1.0",
+ "vx-api 0.1.0",
+ "vx-cv 0.1.0",
 ]
 
 [[package]]
@@ -431,8 +433,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "vx"
 version = "0.1.0"
 dependencies = [
- "bindgen 0.33.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "vx-api 0.1.0",
+]
+
+[[package]]
+name = "vx-api"
+version = "0.1.0"
+dependencies = [
+ "bindgen 0.33.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "vx-cv"
+version = "0.1.0"
+dependencies = [
+ "cv 0.2.1 (git+https://github.com/nebgnahz/cv-rs.git)",
+ "vx 0.1.0",
+ "vx-api 0.1.0",
 ]
 
 [[package]]

@@ -5,9 +5,11 @@ publish = false
 
 [dependencies]
 vx = { path = "./vx" }
+vx-api = { path = "./vx-api" }
+vx-cv = { path = "./vx-cv" }
 
 [workspace]
-members = [ "vx" ]
+members = [ "vx", "vx-cv", "vx-api" ]
 
 [dev-dependencies]
 cv = { git = "https://github.com/nebgnahz/cv-rs.git" }
