@@ -1,9 +1,9 @@
 #![feature(iterator_step_by)] 
 
 extern crate cv;
-extern crate openvx;
+extern crate vx;
 
-use openvx::*;
+use vx::*;
 
 use cv::*;
 use cv::imgproc::*;

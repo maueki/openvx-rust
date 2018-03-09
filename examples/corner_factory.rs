@@ -1,6 +1,6 @@
-extern crate openvx;
+extern crate vx;
 
-use openvx::*;
+use vx::*;
 
 fn main() {
 

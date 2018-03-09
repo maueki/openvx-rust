@@ -1,15 +1,13 @@
 [package]
-name = "openvx"
-version = "0.1.0"
-authors = ["Ueki Masaru <masaru.ueki@itage.co.jp>"]
-license = "MIT"
-repository = "https://github.com/maueki/openvx-rust"
+name = "openvx-test"
+version = "0.0.1"
+publish = false
 
 [dependencies]
-error-chain = "*"
+vx = { path = "./vx" }
 
-[build-dependencies]
-bindgen = "0.33"
+[workspace]
+members = [ "vx" ]
 
 [dev-dependencies]
 cv = { git = "https://github.com/nebgnahz/cv-rs.git" }

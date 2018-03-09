@@ -1,0 +1,12 @@
+[package]
+name = "vx"
+version = "0.1.0"
+authors = ["Ueki Masaru <masaru.ueki@itage.co.jp>"]
+license = "MIT"
+repository = "https://github.com/maueki/openvx-rust/vx"
+
+[dependencies]
+error-chain = "*"
+
+[build-dependencies]
+bindgen = "0.33"

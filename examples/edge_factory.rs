@@ -1,8 +1,8 @@
 
-extern crate openvx;
+extern crate vx;
 
-use openvx::Context;
-use openvx::*;
+use vx::Context;
+use vx::*;
 
 fn main() {
     let mut context = Context::new().unwrap();
