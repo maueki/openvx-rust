@@ -7,7 +7,6 @@ fn main() {
     let mut context = Context::new().unwrap();
 
     let input_image = context.create_image(640, 480, VX_DF_IMAGE_YUYV).unwrap();
-    let output_image = context.create_image(640, 480, VX_DF_IMAGE_U8).unwrap();
     let output_array = context.create_array(VX_TYPE_KEYPOINT, 1000).unwrap();
 
     let mut g = context.create_graph().unwrap();
