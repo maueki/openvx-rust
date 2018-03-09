@@ -10,3 +10,6 @@ error-chain = "*"
 
 [build-dependencies]
 bindgen = "0.33"
+
+[dev-dependencies]
+cv = { git = "https://github.com/nebgnahz/cv-rs.git" }

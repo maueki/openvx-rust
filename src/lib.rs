@@ -26,7 +26,7 @@ mod ffi {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-use self::ffi::*;
+pub use self::ffi::*;
 
 pub use self::ffi::vx_df_image_e::*;
 pub use self::ffi::vx_channel_e::*;
@@ -34,8 +34,6 @@ pub use self::ffi::vx_type_e::*;
 
 use self::ffi::vx_kernel_e::*;
 use self::ffi::vx_status_e::*;
-
-use self::ffi::vx_scalar_attribute_e::*;
 
 use std::mem;
 use std::os::raw::c_void;
@@ -77,7 +75,7 @@ pub trait InputArray {
 }
 
 pub struct Context {
-    ptr: vx_context,
+    pub ptr: vx_context,
 }
 
 fn convert_error(err: vx_status) -> ErrorKind {
@@ -148,7 +146,6 @@ impl Context {
                 self.ptr,
                 data_type as i32,
                 val as *const _ as *const c_void,
-//                std::mem::transmute::<&T, *const c_void>(val),
             );
             let res = vxGetStatus(ptr as vx_reference);
             if res != VX_SUCCESS {
@@ -484,7 +481,7 @@ impl<'a> Drop for Graph<'a> {
 }
 
 pub struct Image {
-    ptr: vx_image,
+    pub ptr: vx_image,
 }
 
 impl Image {}
