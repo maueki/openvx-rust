@@ -62,7 +62,7 @@ pub fn create_mat_from_image(context: &Context, image: &Image) -> Result<Mat> {
 
         let mat = Mat::from_buffer(height as i32, width as i32, CvType::Cv8UC1 as i32, &buffer);
 
-        // !!! Mat::from_buffer doesn't take ownership, but Mat::drop disposes buffer.
+        // !!! Mat::from_buffer doesn't take buffer's ownership, but Mat::drop disposes buffer.
         std::mem::forget(buffer);
         Ok(mat)
     }

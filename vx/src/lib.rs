@@ -118,6 +118,7 @@ impl Context {
         }
     }
 
+    // Unsafe because maybe crash caused by illegal addr
     pub unsafe fn create_image_from_buffer(&self, format: vx_df_image_e::Type,
                                     addr: &vx_imagepatch_addressing_t,
                                     buffer: &[u8]) -> Result<Image> {
