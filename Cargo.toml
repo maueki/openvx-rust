@@ -7,9 +7,10 @@ publish = false
 vx = { path = "./vx" }
 vx-api = { path = "./vx-api" }
 vx-cv = { path = "./vx-cv" }
+vx-nnef = { path = "./vx-nnef" }
 
 [workspace]
-members = [ "vx", "vx-cv", "vx-api" ]
+members = [ "vx", "vx-cv", "vx-api", "vx-nnef" ]
 
 [dev-dependencies]
 cv = { git = "https://github.com/nebgnahz/cv-rs.git" }

@@ -1,0 +1,7 @@
+[package]
+name = "vx-nnef"
+version = "0.1.0"
+authors = ["UEKI Masaru <masaru.ueki@itage.co.jp>"]
+
+[dependencies]
+nnef-parser = { git = "https://github.com/maueki/nnef-parser-rs.git" }
