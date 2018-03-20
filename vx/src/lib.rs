@@ -77,7 +77,7 @@ impl Context {
         }
     }
 
-    pub fn create_graph(&mut self) -> Result<Graph> {
+    pub fn create_graph(&self) -> Result<Graph> {
         unsafe {
             let ptr = vxCreateGraph(self.ptr);
             let res = vxGetStatus(ptr as vx_reference);
@@ -172,6 +172,20 @@ impl Drop for Context {
             if res != VX_SUCCESS {
                 // TODO:
             }
+        }
+    }
+}
+
+impl Clone for Context {
+    fn clone(&self) -> Context {
+        unsafe {
+            let ptr = vxGetContext(self.ptr as vx_reference);
+            let res = vxGetStatus(ptr as vx_reference);
+            if res != VX_SUCCESS {
+                // TODO: 
+                println!("Context::clone() failed");
+            }
+            Context{ptr: ptr}
         }
     }
 }
